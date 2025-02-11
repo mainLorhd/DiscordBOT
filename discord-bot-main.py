@@ -9,7 +9,7 @@ from discord import FFmpegPCMAudio
 discord.FFmpegPCMAudio.executable = "C:\\FFMPEG\\bin\\ffmpeg.exe"
 
 TOKEN = token
-PREFIX = '#'
+PREFIX = '%'
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
@@ -56,6 +56,19 @@ async def stop(ctx):
         return
     await voice_client.disconnect()
     await ctx.send("Отключился от голосового канала.")
+
+@bot.command()
+async def pause(ctx):
+    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+    if voice_client and voice_client.is_playing():
+        voice_client.pause()
+        await ctx.send("Воспроизведение приостановлено.\n Для возобновления напишите %pause")
+        return
+    if voice_client and voice_client.is_paused():
+        voice_client.resume()
+        await ctx.send("Воспроизведение продолжается.")
+        return
+        
 
 @bot.event
 async def on_voice_state_update(member, before, after):
