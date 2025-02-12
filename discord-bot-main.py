@@ -4,12 +4,13 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 from discord import FFmpegPCMAudio
+import random
 
 # Устанавливаем путь к FFmpeg
 discord.FFmpegPCMAudio.executable = "C:\\FFMPEG\\bin\\ffmpeg.exe"
 
 TOKEN = token
-PREFIX = '%'
+PREFIX = '/'
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
@@ -81,5 +82,47 @@ async def on_voice_state_update(member, before, after):
                 if text_channel:
                     await text_channel.send("В голосовом канале никого нет уже минуту. Отключаюсь!")
                 await voice_client.disconnect()
+
+# Музыкальная состовляющяя закончена
+# Начало прикольных команд
+
+# Начало 8ball
+answers = [
+    "Это точно.", # Позитивные
+    "Без сомнения.",
+    "Несомненно.",
+    "Да — определённо.",
+    "На это можно положиться.",
+    "Как я вижу, да.",
+    "Скорее всего.",
+    "Перспективы хорошие.",
+    "Да.",
+    "Знаки указывают на 'да'.",
+    "Повтори вопрос позже.", # Нейтральные
+    "Спроси ещё раз попозже.",
+    "Сейчас лучше не говорить.",
+    "Не могу предсказать сейчас.",
+    "Сконцентрируйся и спроси снова.",
+    "Не стоит на это рассчитывать.", # Негативные
+    "Мой ответ — нет.",
+    "Мои источники говорят 'нет'.",
+    "Перспективы не очень хорошие.",
+    "Очень сомнительно."
+]
+
+@bot.command()
+async def ball8(ctx, question: str = None):
+    
+    if not question == "" and not question == None:
+        answer = discord.Embed(color=7592191)
+        answer.add_field(name="🎱Вопрос🌪:", value=question, inline=False)
+        answer.add_field(name="🎱Ответ🌪:", value=random.choice(answers), inline=False)
+        answer.set_author(name="🎱Магический Шар🌪")
+        await ctx.send(embed=answer)
+        return
+        
+    if question == "" or question == None:
+        await ctx.reply("Пожалуйста, напишите вопрос!")
+        return
 
 bot.run(TOKEN)
