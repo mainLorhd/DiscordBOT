@@ -1,6 +1,7 @@
 from config import token
 import discord
 from discord.ext import commands
+from discord import app_commands
 import yt_dlp
 import asyncio
 from discord import FFmpegPCMAudio
@@ -10,9 +11,8 @@ import random
 discord.FFmpegPCMAudio.executable = "C:\\FFMPEG\\bin\\ffmpeg.exe"
 
 TOKEN = token
-PREFIX = '/'
 intents = discord.Intents.all()
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
+bot = commands.Bot(command_prefix='/', intents=intents)
 
 # Опции для yt-dlp (только стриминг, без скачивания)
 ydl_opts = {
@@ -20,20 +20,43 @@ ydl_opts = {
     'quiet': True,          # Отключаем вывод логов
 }
 
-@bot.command()
-async def play(ctx, url: str = None):
-    if not url:
-        await ctx.send("Пожалуйста, укажите ссылку на YouTube.")
-        return
-    if not ctx.author.voice or not ctx.author.voice.channel:
-        await ctx.send("Вы должны находиться в голосовом канале, чтобы использовать эту команду.")
+# Список ответов для команды 8ball
+answers = [
+    "Это точно.",  # Позитивные
+    "Без сомнения.",
+    "Несомненно.",
+    "Да — определённо.",
+    "На это можно положиться.",
+    "Как я вижу, да.",
+    "Скорее всего.",
+    "Перспективы хорошие.",
+    "Да.",
+    "Знаки указывают на 'да'.",
+    "Повтори вопрос позже.",  # Нейтральные
+    "Спроси ещё раз попозже.",
+    "Сейчас лучше не говорить.",
+    "Не могу предсказать сейчас.",
+    "Сконцентрируйся и спроси снова.",
+    "Не стоит на это рассчитывать.",  # Негативные
+    "Мой ответ — нет.",
+    "Мои источники говорят 'нет'.",
+    "Перспективы не очень хорошие.",
+    "Очень сомнительно."
+]
+
+# Команда /play
+@bot.tree.command(name="play", description="Запускает музыку/видео с YouTube.")
+@app_commands.describe(url="Ссылка на YouTube видео")
+async def play(interaction: discord.Interaction, url: str):
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message("Вы должны находиться в голосовом канале, чтобы использовать эту команду.")
         return
 
-    channel = ctx.author.voice.channel
-    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+    channel = interaction.user.voice.channel
+    voice_client = discord.utils.get(bot.voice_clients, guild=interaction.guild)
 
     # Подключаемся к голосовому каналу, если ещё не подключены
-    vc = ctx.voice_client or await channel.connect()
+    vc = voice_client or await channel.connect()
 
     try:
         # Используем yt-dlp для получения прямой ссылки на аудио
@@ -44,33 +67,46 @@ async def play(ctx, url: str = None):
 
         # Воспроизводим аудио через FFmpegPCMAudio
         vc.play(FFmpegPCMAudio(audio_url), after=lambda e: print("Стриминг завершён"))
-        await ctx.send(f"Сейчас играет: {title}")
-
+        await interaction.response.send_message(f"Сейчас играет: {title}")
     except Exception as e:
-        await ctx.send(f"Произошла ошибка: {str(e)}")
+        await interaction.response.send_message(f"Произошла ошибка: {str(e)}")
 
-@bot.command()
-async def stop(ctx):
-    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+# Команда /stop
+@bot.tree.command(name="stop", description="Выключает воспроизведение и отключает бота от канала.")
+async def stop(interaction: discord.Interaction):
+    voice_client = discord.utils.get(bot.voice_clients, guild=interaction.guild)
     if not voice_client or not voice_client.is_connected():
-        await ctx.send("Я не подключён к голосовому каналу.")
+        await interaction.response.send_message("Я не подключён к голосовому каналу.")
         return
-    await voice_client.disconnect()
-    await ctx.send("Отключился от голосового канала.")
 
-@bot.command()
-async def pause(ctx):
-    voice_client = discord.utils.get(bot.voice_clients, guild=ctx.guild)
+    await voice_client.disconnect()
+    await interaction.response.send_message("Отключился от голосового канала.")
+
+# Команда /pause
+@bot.tree.command(name="pause", description="Ставит воспроизведение на паузу. Возобновляет воспроизведение при повторном использовании команды.")
+async def pause(interaction: discord.Interaction):
+    voice_client = discord.utils.get(bot.voice_clients, guild=interaction.guild)
     if voice_client and voice_client.is_playing():
         voice_client.pause()
-        await ctx.send("Воспроизведение приостановлено.\n Для возобновления напишите %pause")
+        await interaction.response.send_message("Воспроизведение приостановлено.\nДля возобновления напишите `/pause`")
         return
+
     if voice_client and voice_client.is_paused():
         voice_client.resume()
-        await ctx.send("Воспроизведение продолжается.")
+        await interaction.response.send_message("Воспроизведение продолжается.")
         return
-        
 
+# Команда /8ball
+@bot.tree.command(name="8ball", description="Спросите у магического шара Шторм.")
+@app_commands.describe(question="Ваш вопрос")
+async def ball8(interaction: discord.Interaction, question: str):
+    embed = discord.Embed(color=7592191)
+    embed.add_field(name="🎱Вопрос:", value=question, inline=False)
+    embed.add_field(name="🎱Ответ:", value=random.choice(answers), inline=False)
+    embed.set_author(name="🎱Магический Шар Шторм🌪")
+    await interaction.response.send_message(embed=embed)
+
+# Автоматическое отключение бота, если в канале никого нет
 @bot.event
 async def on_voice_state_update(member, before, after):
     voice_client = discord.utils.get(bot.voice_clients, guild=member.guild)
@@ -82,47 +118,27 @@ async def on_voice_state_update(member, before, after):
                 if text_channel:
                     await text_channel.send("В голосовом канале никого нет уже минуту. Отключаюсь!")
                 await voice_client.disconnect()
+@bot.event
+async def on_ready():
+    try:
+        # Очищаем старые команды
+        bot.tree.clear_commands(guild=None)
+        await bot.tree.sync()
+        print(f"Синхронизировано {len(bot.tree.get_commands())} команд.")
+    except Exception as e:
+        print(f"Ошибка при синхронизации: {e}")
+    print(f"Бот {bot.user} запущен!")
 
-# Музыкальная состовляющяя закончена
-# Начало прикольных команд
+# Синхронизация команд при запуске бота
+@bot.event
+async def on_ready():
+    try:
+        await bot.tree.sync()
+        print(f"Синхронизировано {len(bot.tree.get_commands())} команд.")
+    except Exception as e:
+        print(f"Ошибка при синхронизации: {e}")
+    print(f"Бот {bot.user} запущен!")
 
-# Начало 8ball
-answers = [
-    "Это точно.", # Позитивные
-    "Без сомнения.",
-    "Несомненно.",
-    "Да — определённо.",
-    "На это можно положиться.",
-    "Как я вижу, да.",
-    "Скорее всего.",
-    "Перспективы хорошие.",
-    "Да.",
-    "Знаки указывают на 'да'.",
-    "Повтори вопрос позже.", # Нейтральные
-    "Спроси ещё раз попозже.",
-    "Сейчас лучше не говорить.",
-    "Не могу предсказать сейчас.",
-    "Сконцентрируйся и спроси снова.",
-    "Не стоит на это рассчитывать.", # Негативные
-    "Мой ответ — нет.",
-    "Мои источники говорят 'нет'.",
-    "Перспективы не очень хорошие.",
-    "Очень сомнительно."
-]
 
-@bot.command()
-async def ball8(ctx, question: str = None):
-    
-    if not question == "" and not question == None:
-        answer = discord.Embed(color=7592191)
-        answer.add_field(name="🎱Вопрос🌪:", value=question, inline=False)
-        answer.add_field(name="🎱Ответ🌪:", value=random.choice(answers), inline=False)
-        answer.set_author(name="🎱Магический Шар🌪")
-        await ctx.send(embed=answer)
-        return
-        
-    if question == "" or question == None:
-        await ctx.reply("Пожалуйста, напишите вопрос!")
-        return
-
+# Запуск бота
 bot.run(TOKEN)
